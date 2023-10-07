@@ -49,7 +49,7 @@ class Node:
             str1_li.append(kid.build_str(prefix_new, opt))
         return ''.join(str1_li)
     
-  def draw_tree(self, bMaximizer=True) -> None:
+  def draw_tree(self, bMaximizer=True, verbose=False) -> None:
     # self must be the root node
     # You can call this method before or after evaluation, 
     # that is, before or after minimax/alpha-beta.
@@ -78,8 +78,8 @@ class Node:
       option_str = \
         "  node [width=.25 height=.3 fixedsize=true fontsize=10];\n" + \
         "  nodesep = 0.2;\n  ranksep = 0.2;\n\n"
-      max_str = "↑"
-      min_str = "↓"
+      max_str = "max" # "↑"
+      min_str = "min" # "↓"
 
     def build_labels_rec(node, bMaximizer, prefix: str = '') -> str:
       # bMaximizer: True/False if the maximizer/minimizer plays first.      
@@ -127,6 +127,8 @@ class Node:
     relations_str = build_relations_rec(self)
     dot_data = prefix + option_str + labels_str + relations_str + suffix
 
+    if verbose:
+      print(dot_data)
     graph = graphviz.Source(dot_data)
     display(graph)
 
@@ -217,19 +219,26 @@ def build_my_tree(terminal_label_li: List[int] = []) -> Node:
 
 def minimax(node: Node, toMaximize: bool, move_path: List[int] = []) \
             -> Tuple[float | None, List[int]]:
+  # Recursive implementation of minimax algorithm.
+  # node: the root node of the tree to be evaluated.
+  # toMaximize: True if the maximizer plays first.
+  # move_path: list of indices of children nodes to be taken
+  #            to reach the current node from the root node.
+  # Return value is the tuple 
+  #   (value of the node after minimax, the move_path to the node).
+
   # The 'depth' parameter that is usually used in minimax() algorithm
   # is omitted here.  This is because the evaluation of a node is 
   # simply node.value, which is given to terminal nodes only.
   
   # Non-terminal nodes are assumed to be labeled with None, and
   # will be labeled with the value of the node after minimax.
-  # move_path: list of indices of children nodes to be taken
-  #            to reach the current node from the root node.
 
   # Node is mutated by this function: for all descendant nodes of the 
   # input node, node.evaluated is set to True, and node.value is set 
   # to the value of the node after minimax. A node is a descendant of 
   # itself of course.
+
 
   if node.is_terminal():
     val = node.evaluate()
@@ -269,20 +278,16 @@ def minimax(node: Node, toMaximize: bool, move_path: List[int] = []) \
 def alpha_beta_pruning(node: Node, toMaximize: bool,
     alpha: float = float('-inf'), beta: float = float('inf'),
     move_path: List[int] = []) -> Tuple[float | None, List[int]]:
-  # The 'depth' parameter that is usually used in alpha_beta algorithm
-  # is omitted here.  This is because the evaluation of a node is 
-  # simply node.value, which is given to terminal nodes only.
-
-  # Non-terminal nodes are assumed to be labeled with None, and
-  # will be labeled with the value of the node after minimax.
-  # move_path: list of indices of children nodes to be taken
-  #            to reach the current node from the root node.
+  # alpha: the minimum value that the maximizer is assured
+  # beta: the maximum value that the minimizer is assured
+  # alpha, beta are not properties of nodes, but sort of a global 
+  # variable that is passed along the computation process.
   
   # Node is mutated by this function: for all descendant nodes of the 
-  # input node, node.evaluated is set to True, and node.value is set 
-  # to the value of the node after alpha_beta_pruning. A node is a 
-  # descendant of itself of course.  
-
+  # input node, except those descendants that belong to pruned branches,
+  # node.evaluated is set to True, and node.value is set to the value 
+  # of the node after minimax.
+  
   if node.is_terminal():
     val = node.evaluate()
     if val is None:
@@ -290,37 +295,44 @@ def alpha_beta_pruning(node: Node, toMaximize: bool,
     return val, []
 
   node.evaluated = True
-  break_flag = False
   i = 0
   if toMaximize:
-    max_val = float('-inf')
+    # print(f"(maximize) alpha: {alpha}, beta: {beta}")
+    max_val = float('-inf') # for the children of this node
     move_path0 = []
     for i, child in enumerate(node.get_children()):
-      val, move_path = alpha_beta_pruning(child, False,
-                                          alpha, beta, move_path)
+      val, move_path = alpha_beta_pruning(child, False, alpha, beta, move_path)
       assert val is not None
       if val > max_val:
         max_val = val
         move_path0 = [i] + move_path
-        alpha = max(alpha, max_val)
-        if max_val >= beta:
-          break_flag = True
+        # alpha, passed from the parent, is updated here
+        alpha = max(alpha, val) 
+        # beta is passed from the minimizing parent
+        if val >= beta: 
+          # The parent will not use max_val because it is a minimizer.
+          # Further search is futile because it can only make max_val, 
+          # the return value larger.
           break
     node.value = max_val # for visualization only
     return max_val, move_path0
   else:
-    min_val = float('inf')
+    # print(f"(minimize) alpha: {alpha}, beta: {beta}")
+    min_val = float('inf') # for the children of this node
     move_path0 = []
     for i, child in enumerate(node.get_children()):
-      val, move_path = alpha_beta_pruning(child, True,
-                                          alpha, beta, move_path)
+      val, move_path = alpha_beta_pruning(child, True, alpha, beta, move_path)
       assert val is not None
       if val < min_val:
         min_val = val
         move_path0 = [i] + move_path
-        beta = min(beta, min_val)
-        if min_val <= alpha:
-          break_flag = True
+        # beta, passed from the parent, is updated here
+        beta = min(beta, val)
+        # alpha is passed from the maximizing parent
+        if val <= alpha: 
+          # The parent will not use min_val because it is a maximizer.
+          # Further search is futile because it will only make min_val,
+          # the return value smaller.
           break
     node.value = min_val # for visualization only
     return min_val, move_path0
